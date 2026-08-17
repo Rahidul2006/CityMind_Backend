@@ -21,8 +21,22 @@ const userSchema = new mongoose.Schema(
     },
     role: {
       type: String,
-      enum: ['admin', 'officer', 'citizen', 'user'],
-      default: 'admin',
+      enum: ['ADMIN', 'SUPER_ADMIN', 'DEPARTMENT_OFFICER', 'CITIZEN', 'admin', 'officer', 'citizen', 'user'],
+      default: 'ADMIN',
+    },
+    departmentId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Department',
+      default: null,
+      index: true,
+    },
+    isActive: {
+      type: Boolean,
+      default: true,
+    },
+    lastLoginAt: {
+      type: Date,
+      default: null,
     },
   },
   { timestamps: true }

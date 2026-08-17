@@ -131,6 +131,56 @@ const getNearbyComplaints = async (req, res) => {
   }
 };
 
+const assignDepartment = async (req, res) => {
+  try {
+    const { departmentId, reason } = req.body;
+    if (!departmentId) {
+      return res.status(400).json({
+        success: false,
+        message: "departmentId is required",
+        errorCode: "DEPARTMENT_ID_REQUIRED",
+      });
+    }
+
+    const complaint = await complaintService.assignComplaintToDepartment(
+      req.params.id,
+      departmentId,
+      reason,
+      req.user?._id || "Admin"
+    );
+
+    res.status(200).json({
+      success: true,
+      message: "Complaint assigned to department successfully",
+      data: complaint,
+      complaint,
+    });
+  } catch (error) {
+    res.status(400).json({
+      success: false,
+      message: error.message || "Failed to assign complaint to department",
+      errorCode: "ASSIGNMENT_FAILED",
+    });
+  }
+};
+
+const getUnassignedComplaints = async (req, res) => {
+  try {
+    const complaints = await complaintService.getUnassignedComplaints(req.query);
+    res.status(200).json({
+      success: true,
+      data: complaints,
+      complaints,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message || "Failed to fetch unassigned complaints",
+      errorCode: "UNASSIGNED_FETCH_FAILED",
+    });
+  }
+};
+
 module.exports = {
   createComplaint,
   getComplaints,
@@ -138,4 +188,6 @@ module.exports = {
   updateStatus,
   verifyResolution,
   getNearbyComplaints,
+  assignDepartment,
+  getUnassignedComplaints,
 };
