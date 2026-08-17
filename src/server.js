@@ -8,11 +8,11 @@ const connectDB = require('./config/db');
 
 const PORT = process.env.PORT || 5000;
 
-// Connect to MongoDB Atlas, then start server
+// Connect to MongoDB Atlas, then start server on 0.0.0.0 to accept connections from emulators and physical devices
 connectDB()
   .then(() => {
-    app.listen(PORT, () => {
-      console.log(`Server running on port ${PORT}`);
+    app.listen(PORT, '0.0.0.0', () => {
+      console.log(`Server running on http://0.0.0.0:${PORT} (Accessible via localhost and local IP)`);
     });
   })
   .catch((error) => {
