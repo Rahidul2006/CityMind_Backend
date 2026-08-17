@@ -1,545 +1,265 @@
-const mongoose = require("mongoose");
 const Complaint = require("../models/ComplaintModel");
+const { uploadBufferToCloudinary } = require("../config/cloudinaryConfig");
 
 class ComplaintService {
-  // =====================================================
-  // CREATE COMPLAINT
-  // =====================================================
+  // Generate unique complaint ID (e.g., CM-2026-001284)
+  async generateComplaintId() {
+    const year = new Date().getFullYear();
+    const count = await Complaint.countDocuments();
+    const number = String(count + 1).padStart(6, "0");
+    return `CM-${year}-${number}`;
+  }
 
-  async createComplaint(data, citizenId) {
+  // Create complaint with Cloudinary image upload and MongoDB persistence
+  async createComplaint(bodyData, file, citizenId) {
     const {
-      title,
-      description,
       category,
-      location,
-      department,
-      estimatedRepairHours,
-      slaHours,
-    } = data;
+      description,
+      latitude,
+      longitude,
+      gpsAccuracy,
+      capturedAt,
+      reportedLatitude,
+      reportedLongitude,
+      locationSource,
+      address,
+      aiAnalysis,
+    } = bodyData;
 
-    // Basic validation
-    if (!title || !description || !category) {
-      throw new Error(
-        "Title, description and category are required"
-      );
+    if (!category || !description) {
+      throw new Error("Category and description are required");
     }
 
-    if (!location?.coordinates || !location?.address) {
-      throw new Error("Complete location information is required");
+    const capLat = parseFloat(latitude || reportedLatitude || 0);
+    const capLng = parseFloat(longitude || reportedLongitude || 0);
+    const repLat = parseFloat(reportedLatitude || capLat);
+    const repLng = parseFloat(reportedLongitude || capLng);
+    const accuracy = parseFloat(gpsAccuracy || 0);
+
+    // Upload file to Cloudinary if image file is attached
+    let imageObj = {
+      url: "https://images.unsplash.com/photo-1515162816999-a0c47dc192f7", // default placeholder
+      publicId: "citymind/default",
+      capturedAt: capturedAt ? new Date(capturedAt) : new Date(),
+      latitude: capLat,
+      longitude: capLng,
+      gpsAccuracy: accuracy,
+    };
+
+    if (file && file.buffer) {
+      const complaintIdTemp = await this.generateComplaintId();
+      const folder = `citymind/complaints/${complaintIdTemp}`;
+      const uploadResult = await uploadBufferToCloudinary(file.buffer, folder);
+      imageObj.url = uploadResult.url;
+      imageObj.publicId = uploadResult.publicId;
     }
 
-    if (!location.ward) {
-      throw new Error("Ward is required");
-    }
-
-    // Generate public complaint ID
     const complaintId = await this.generateComplaintId();
 
-    // Calculate SLA deadline if SLA is provided
-    let slaDeadline = null;
+    // Parse AI Analysis if passed as string/object
+    let parsedAi = {
+      detectedCategory: category,
+      confidence: 0.95,
+      severity: "HIGH",
+      safetyRisk: "MEDIUM",
+      recommendedPriority: "NORMAL",
+    };
 
-    if (slaHours) {
-      slaDeadline = new Date(
-        Date.now() + slaHours * 60 * 60 * 1000
-      );
+    if (aiAnalysis) {
+      try {
+        parsedAi = typeof aiAnalysis === "string" ? JSON.parse(aiAnalysis) : aiAnalysis;
+      } catch (e) {
+        // use default
+      }
     }
 
     const complaint = await Complaint.create({
       complaintId,
-
-      citizen: citizenId,
-
-      title: title.trim(),
-
-      description: description.trim(),
-
+      title: bodyData.title ? bodyData.title.trim() : `${category || 'Civic Issue'} Report`,
       category,
-
-      location,
-
-      department: department || null,
-
-      estimatedRepairHours:
-        estimatedRepairHours || null,
-
-      slaHours: slaHours || null,
-
-      slaDeadline,
-
-      status: "Reported",
-
-      // Initial values.
-      // These can be changed by admin/officer later.
-      severity: "Medium",
-
-      score: 0,
-
-      reportedAt: new Date(),
+      description: description.trim(),
+      image: imageObj,
+      capturedLocation: {
+        latitude: capLat,
+        longitude: capLng,
+        accuracy: accuracy,
+      },
+      reportedLocation: {
+        latitude: repLat,
+        longitude: repLng,
+      },
+      locationSource: locationSource || "gps",
+      address: address || "Captured GPS Location",
+      // GeoJSON requires [longitude, latitude]
+      location: {
+        type: "Point",
+        coordinates: [repLng, repLat],
+      },
+      aiAnalysis: parsedAi,
+      status: "SUBMITTED",
+      department: {
+        id: "DEPT-CIVIC",
+        name: "Municipal Works Department",
+      },
+      statusHistory: [
+        {
+          status: "SUBMITTED",
+          timestamp: new Date(),
+          message: "Complaint registered successfully by citizen.",
+        },
+      ],
+      citizen: citizenId || "demoCitizenId",
     });
 
     return complaint;
   }
 
-  // =====================================================
-  // GENERATE COMPLAINT ID
-  // =====================================================
+  // Get all complaints
+  async getComplaints(query = {}) {
+    const filters = {};
+    if (query.category) filters.category = query.category;
+    if (query.status) filters.status = query.status;
 
-  async generateComplaintId() {
-    const year = new Date().getFullYear();
+    const complaints = await Complaint.find(filters)
+      .sort({ createdAt: -1 })
+      .lean();
 
-    const count = await Complaint.countDocuments();
-
-    const number = String(count + 1).padStart(6, "0");
-
-    return `CMP-${year}-${number}`;
+    return complaints;
   }
 
-  // =====================================================
-  // GET ALL COMPLAINTS
-  // =====================================================
-
-  async getComplaints(filters = {}) {
-    const {
-      search,
-      status,
-      severity,
-      category,
-      department,
-      ward,
-      page = 1,
-      limit = 10,
-    } = filters;
-
-    const query = {};
-
-    // Search by title/category/address
-    if (search) {
-      query.$or = [
-        {
-          title: {
-            $regex: search,
-            $options: "i",
-          },
-        },
-        {
-          category: {
-            $regex: search,
-            $options: "i",
-          },
-        },
-        {
-          "location.address": {
-            $regex: search,
-            $options: "i",
-          },
-        },
-      ];
-    }
-
-    if (status) {
-      query.status = status;
-    }
-
-    if (severity) {
-      query.severity = severity;
-    }
-
-    if (category) {
-      query.category = category;
-    }
-
-    if (department) {
-      query.department = department;
-    }
-
-    if (ward) {
-      query["location.ward"] = ward;
-    }
-
-    const skip = (page - 1) * limit;
-
-    const [complaints, total] = await Promise.all([
-      Complaint.find(query)
-        .populate("citizen", "name email")
-        .populate("department", "name code")
-        .populate("assignedOfficer", "name email")
-        .populate("location.ward", "wardNumber name")
-        .sort({ reportedAt: -1 })
-        .skip(skip)
-        .limit(Number(limit))
-        .lean(),
-
-      Complaint.countDocuments(query),
-    ]);
-
-    return {
-      complaints,
-
-      pagination: {
-        total,
-        page: Number(page),
-        limit: Number(limit),
-        totalPages: Math.ceil(total / limit),
-      },
-    };
-  }
-
-  // =====================================================
-  // GET COMPLAINT BY ID
-  // =====================================================
-
+  // Get single complaint details by ID or complaintId
   async getComplaintById(id) {
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      throw new Error("Invalid complaint ID");
-    }
-
-    const complaint = await Complaint.findById(id)
-      .populate("citizen", "name email phone")
-      .populate("department", "name code")
-      .populate("assignedOfficer", "name email phone")
-      .populate("location.ward", "wardNumber name");
+    let complaint = await Complaint.findOne({
+      $or: [{ _id: id.match(/^[0-9a-fA-F]{24}$/) ? id : null }, { complaintId: id }],
+    }).lean();
 
     if (!complaint) {
-      throw new Error("Complaint not found");
+      throw new Error(`Complaint with ID '${id}' not found`);
     }
-
     return complaint;
   }
 
-  // =====================================================
-  // UPDATE COMPLAINT
-  // =====================================================
-
-  async updateComplaint(id, data) {
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      throw new Error("Invalid complaint ID");
-    }
-
-    const allowedFields = [
-      "title",
-      "description",
-      "category",
-      "location",
-      "estimatedRepairHours",
-      "department",
-      "severity",
-      "score",
-      "slaHours",
-      "slaDeadline",
+  // Update status (for admin/dashboard/internal)
+  async updateStatus(id, status, message = "") {
+    const validStatuses = [
+      "SUBMITTED",
+      "VERIFIED",
+      "ASSIGNED",
+      "IN_PROGRESS",
+      "RESOLVED",
+      "REOPENED",
+      "REJECTED",
     ];
 
-    const updateData = {};
-
-    for (const field of allowedFields) {
-      if (data[field] !== undefined) {
-        updateData[field] = data[field];
-      }
+    if (!validStatuses.includes(status)) {
+      throw new Error(`Invalid status '${status}'`);
     }
 
-    const complaint = await Complaint.findByIdAndUpdate(
-      id,
-      updateData,
-      {
-        new: true,
-        runValidators: true,
-      }
-    );
+    const complaint = await Complaint.findOne({
+      $or: [{ _id: id.match(/^[0-9a-fA-F]{24}$/) ? id : null }, { complaintId: id }],
+    });
 
     if (!complaint) {
       throw new Error("Complaint not found");
     }
 
+    complaint.status = status;
+    complaint.statusHistory.push({
+      status,
+      timestamp: new Date(),
+      message: message || `Status updated to ${status}`,
+    });
+
+    await complaint.save();
     return complaint;
   }
 
-  // =====================================================
-  // ASSIGN COMPLAINT TO OFFICER
-  // =====================================================
-
-  async assignComplaint(id, officerId) {
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      throw new Error("Invalid complaint ID");
-    }
-
-    if (!mongoose.Types.ObjectId.isValid(officerId)) {
-      throw new Error("Invalid officer ID");
-    }
-
-    const complaint = await Complaint.findByIdAndUpdate(
-      id,
-      {
-        assignedOfficer: officerId,
-        status: "Assigned",
-        assignedAt: new Date(),
-      },
-      {
-        new: true,
-        runValidators: true,
-      }
-    );
+  // Citizen verify resolution endpoint
+  async verifyResolution(id, resolved, message = "") {
+    const complaint = await Complaint.findOne({
+      $or: [{ _id: id.match(/^[0-9a-fA-F]{24}$/) ? id : null }, { complaintId: id }],
+    });
 
     if (!complaint) {
       throw new Error("Complaint not found");
     }
 
-    return complaint;
-  }
+    const isResolved = Boolean(resolved);
+    const newStatus = isResolved ? "RESOLVED" : "REOPENED";
+    const historyMsg = isResolved
+      ? `Citizen confirmed resolution: ${message || "Issue resolved"}`
+      : `Citizen rejected resolution (Reopened): ${message || "Issue still exists"}`;
 
-  // =====================================================
-  // UPDATE STATUS
-  // =====================================================
+    complaint.status = newStatus;
+    complaint.resolution = {
+      imageUrl: complaint.resolution?.imageUrl || null,
+      verifiedByCitizen: isResolved,
+      verificationMessage: message || "",
+      verifiedAt: new Date(),
+    };
 
-  async updateStatus(id, newStatus) {
-    const allowedStatuses = [
-      "Reported",
-      "Assigned",
-      "In Progress",
-      "Resolved",
-      "Closed",
-    ];
-
-    if (!allowedStatuses.includes(newStatus)) {
-      throw new Error("Invalid complaint status");
-    }
-
-    const complaint = await Complaint.findById(id);
-
-    if (!complaint) {
-      throw new Error("Complaint not found");
-    }
-
-    const updateData = {
+    complaint.statusHistory.push({
       status: newStatus,
-    };
-
-    // Status timestamps
-    if (newStatus === "In Progress") {
-      updateData.startedAt = new Date();
-    }
-
-    if (newStatus === "Resolved") {
-      updateData.resolvedAt = new Date();
-    }
-
-    if (newStatus === "Closed") {
-      updateData.closedAt = new Date();
-
-      // If closed directly, make sure resolvedAt exists
-      if (!complaint.resolvedAt) {
-        updateData.resolvedAt = new Date();
-      }
-    }
-
-    Object.assign(complaint, updateData);
+      timestamp: new Date(),
+      message: historyMsg,
+    });
 
     await complaint.save();
-
     return complaint;
   }
 
-  // =====================================================
-  // RESOLVE COMPLAINT
-  // =====================================================
+  // Get nearby complaints within radius (meters)
+  async getNearbyComplaints(latitude, longitude, radius = 5000) {
+    const lat = parseFloat(latitude);
+    const lng = parseFloat(longitude);
+    const radMeters = parseInt(radius) || 5000;
 
-  async resolveComplaint(id, resolutionNote = "") {
-    const complaint = await Complaint.findById(id);
-
-    if (!complaint) {
-      throw new Error("Complaint not found");
+    if (isNaN(lat) || isNaN(lng)) {
+      throw new Error("Valid latitude and longitude are required");
     }
 
-    complaint.status = "Resolved";
-    complaint.resolvedAt = new Date();
-    complaint.resolutionNote = resolutionNote.trim();
-
-    await complaint.save();
-
-    return complaint;
-  }
-
-  // =====================================================
-  // DELETE COMPLAINT
-  // =====================================================
-
-  async deleteComplaint(id) {
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      throw new Error("Invalid complaint ID");
-    }
-
-    const complaint = await Complaint.findByIdAndDelete(id);
-
-    if (!complaint) {
-      throw new Error("Complaint not found");
-    }
-
-    return complaint;
-  }
-
-  // =====================================================
-  // COMPLAINT STATISTICS
-  // =====================================================
-
-  async getComplaintStatistics() {
-    const [
-      total,
-      active,
-      critical,
-      pending,
-      resolved,
-      overdue,
-    ] = await Promise.all([
-      Complaint.countDocuments(),
-
-      Complaint.countDocuments({
-        status: {
-          $in: [
-            "Reported",
-            "Assigned",
-            "In Progress",
-          ],
-        },
-      }),
-
-      Complaint.countDocuments({
-        severity: "Critical",
-        status: {
-          $nin: ["Resolved", "Closed"],
-        },
-      }),
-
-      Complaint.countDocuments({
-        status: {
-          $in: [
-            "Reported",
-            "Assigned",
-            "In Progress",
-          ],
-        },
-      }),
-
-      Complaint.countDocuments({
-        status: "Resolved",
-      }),
-
-      Complaint.countDocuments({
-        status: {
-          $nin: ["Resolved", "Closed"],
-        },
-        slaDeadline: {
-          $lt: new Date(),
-          $ne: null,
-        },
-      }),
-    ]);
-
-    return {
-      total,
-      active,
-      critical,
-      pending,
-      resolved,
-      overdue,
-    };
-  }
-
-  // =====================================================
-  // ISSUES BY CATEGORY
-  // =====================================================
-
-  async getIssuesByCategory() {
-    return Complaint.aggregate([
-      {
-        $group: {
-          _id: "$category",
-          count: {
-            $sum: 1,
+    // Try GeoJSON $near query, with fallback to distance filter
+    try {
+      const complaints = await Complaint.find({
+        location: {
+          $near: {
+            $geometry: {
+              type: "Point",
+              coordinates: [lng, lat],
+            },
+            $maxDistance: radMeters,
           },
         },
-      },
-
-      {
-        $sort: {
-          count: -1,
-        },
-      },
-    ]);
-  }
-
-  // =====================================================
-  // ISSUES BY STATUS
-  // =====================================================
-
-  async getIssuesByStatus() {
-    return Complaint.aggregate([
-      {
-        $group: {
-          _id: "$status",
-          count: {
-            $sum: 1,
-          },
-        },
-      },
-
-      {
-        $sort: {
-          count: -1,
-        },
-      },
-    ]);
-  }
-
-  // =====================================================
-  // PRIORITY ISSUES
-  // =====================================================
-
-  async getPriorityIssues(limit = 10) {
-    return Complaint.find({
-      status: {
-        $nin: ["Resolved", "Closed"],
-      },
-
-      severity: {
-        $in: ["Critical", "High"],
-      },
-    })
-      .populate("department", "name")
-      .populate("location.ward", "wardNumber name")
-      .sort({
-        score: -1,
-        reportedAt: -1,
       })
-      .limit(limit)
-      .lean();
+        .select("-citizen") // Don't expose private citizen info
+        .lean();
+
+      return complaints;
+    } catch (e) {
+      // Fallback query if 2dsphere index building is pending
+      const all = await Complaint.find().select("-citizen").lean();
+      return all.filter((c) => {
+        const cLat = c.reportedLocation?.latitude || c.image?.latitude || 0;
+        const cLng = c.reportedLocation?.longitude || c.image?.longitude || 0;
+        const dist = this.haversineDistance(lat, lng, cLat, cLng);
+        return dist <= radMeters;
+      });
+    }
   }
 
-  // =====================================================
-  // MAP ISSUES
-  // =====================================================
+  haversineDistance(lat1, lon1, lat2, lon2) {
+    const R = 6371e3; // Earth radius in metres
+    const φ1 = (lat1 * Math.PI) / 180;
+    const φ2 = (lat2 * Math.PI) / 180;
+    const Δφ = ((lat2 - lat1) * Math.PI) / 180;
+    const Δλ = ((lon2 - lon1) * Math.PI) / 180;
 
-  async getMapIssues(filters = {}) {
-    const query = {};
+    const a =
+      Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
+      Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 
-    if (filters.category) {
-      query.category = filters.category;
-    }
-
-    if (filters.status) {
-      query.status = filters.status;
-    }
-
-    if (filters.ward) {
-      query["location.ward"] = filters.ward;
-    }
-
-    return Complaint.find(query)
-      .select(
-        "complaintId title category status severity score location"
-      )
-      .populate(
-        "location.ward",
-        "wardNumber name"
-      )
-      .lean();
+    return R * c;
   }
 }
 

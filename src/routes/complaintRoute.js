@@ -1,113 +1,55 @@
 const express = require("express");
-
 const router = express.Router();
 
 const complaintController = require("../controllers/complaintController");
 const { authenticate: authMiddleware } = require("../middlewares/authMiddleware");
-
+const upload = require("../middlewares/uploadMiddleware");
 
 // ==========================================
-// COMPLAINT ROUTES
+// COMPLAINT ROUTES FOR CITYMIND AI
 // ==========================================
 
-// Create a new complaint
+// 1. Create a new complaint (with image upload to Cloudinary)
 router.post(
   "/",
   authMiddleware,
+  upload.single("image"),
   complaintController.createComplaint
 );
 
-// Get all complaints
-// Supports:
-// ?search=pothole
-// ?status=In Progress
-// ?severity=Critical
-// ?category=Potholes
-// ?department=departmentId
-// ?ward=wardId
-// ?page=1&limit=10
+// 2. Get nearby complaints for Map view (MUST BE BEFORE /:id ROUTE)
+router.get(
+  "/nearby",
+  authMiddleware,
+  complaintController.getNearbyComplaints
+);
+
+// 3. Get all complaints belonging to/visible for citizen
 router.get(
   "/",
   authMiddleware,
   complaintController.getComplaints
 );
 
-// Complaint statistics
-router.get(
-  "/stats",
-  authMiddleware,
-  complaintController.getComplaintStatistics
-);
-
-// Issues by category
-router.get(
-  "/stats/category",
-  authMiddleware,
-  complaintController.getIssuesByCategory
-);
-
-// Issues by status
-router.get(
-  "/stats/status",
-  authMiddleware,
-  complaintController.getIssuesByStatus
-);
-
-// Priority complaints
-router.get(
-  "/priority",
-  authMiddleware,
-  complaintController.getPriorityIssues
-);
-
-// Complaints for live map
-router.get(
-  "/map",
-  authMiddleware,
-  complaintController.getMapIssues
-);
-
-// Get a single complaint
+// 4. Get complete details for a single complaint
 router.get(
   "/:id",
   authMiddleware,
   complaintController.getComplaintById
 );
 
-// Update complaint
-router.patch(
-  "/:id",
+// 5. Citizen verifies resolution (YES -> RESOLVED / NO -> REOPENED)
+router.post(
+  "/:id/verify",
   authMiddleware,
-  complaintController.updateComplaint
+  complaintController.verifyResolution
 );
 
-// Assign complaint to officer
-router.patch(
-  "/:id/assign",
-  authMiddleware,
-  complaintController.assignComplaint
-);
-
-// Update complaint status
+// 6. Update complaint status (used by municipal dashboard / internal)
 router.patch(
   "/:id/status",
   authMiddleware,
   complaintController.updateStatus
 );
-
-// Resolve complaint
-router.patch(
-  "/:id/resolve",
-  authMiddleware,
-  complaintController.resolveComplaint
-);
-
-// Delete complaint
-router.delete(
-  "/:id",
-  authMiddleware,
-  complaintController.deleteComplaint
-);
-
 
 module.exports = router;

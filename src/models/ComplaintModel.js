@@ -2,7 +2,6 @@ const mongoose = require("mongoose");
 
 const complaintSchema = new mongoose.Schema(
   {
-    // Public complaint identifier
     complaintId: {
       type: String,
       unique: true,
@@ -10,180 +9,116 @@ const complaintSchema = new mongoose.Schema(
       trim: true,
     },
 
-    // Citizen who submitted the complaint
-    citizen: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
+    title: {
+      type: String,
+      default: "Civic Issue Report",
+      trim: true,
+    },
+
+    category: {
+      type: String,
       required: true,
       index: true,
     },
 
-    // Complaint title
-    title: {
-      type: String,
-      required: true,
-      trim: true,
-      maxlength: 150,
-    },
-
-    // Detailed explanation
     description: {
       type: String,
       required: true,
       trim: true,
-      maxlength: 2000,
     },
 
-    // Municipal issue category
-    category: {
+    image: {
+      url: { type: String, default: "" },
+      publicId: { type: String, default: "" },
+      capturedAt: { type: Date, default: Date.now },
+      latitude: { type: Number, required: true },
+      longitude: { type: Number, required: true },
+      gpsAccuracy: { type: Number, default: 0 },
+    },
+
+    capturedLocation: {
+      latitude: { type: Number, required: true },
+      longitude: { type: Number, required: true },
+      accuracy: { type: Number, default: 0 },
+    },
+
+    reportedLocation: {
+      latitude: { type: Number, required: true },
+      longitude: { type: Number, required: true },
+    },
+
+    locationSource: {
       type: String,
-      enum: [
-        "Potholes",
-        "Garbage Overflow",
-        "Broken Streetlights",
-        "Water Leakage",
-        "Drain Blockage",
-        "Road Cracks",
-        "Others",
-      ],
-      required: true,
-      index: true,
+      enum: ["gps", "manual_adjustment"],
+      default: "gps",
     },
 
-    // Complaint location
+    address: {
+      type: String,
+      default: "Location coordinates captured",
+      trim: true,
+    },
+
+    // GeoJSON Point location for MongoDB geospatial 2dsphere queries
     location: {
       type: {
         type: String,
         enum: ["Point"],
         default: "Point",
-        required: true,
       },
-
       // [longitude, latitude]
       coordinates: {
         type: [Number],
         required: true,
       },
-
-      // Human-readable address
-      address: {
-        type: String,
-        required: true,
-        trim: true,
-      },
-
-      // Ward where complaint was reported
-      ward: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: "Ward",
-        required: true,
-        index: true,
-      },
     },
 
-    // Department responsible for resolving complaint
-    department: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "Department",
-      default: null,
-      index: true,
+    aiAnalysis: {
+      detectedCategory: { type: String, default: "Civic Issue" },
+      confidence: { type: Number, default: 0.95 },
+      severity: { type: String, default: "HIGH" },
+      safetyRisk: { type: String, default: "MEDIUM" },
+      recommendedPriority: { type: String, default: "NORMAL" },
     },
 
-    // Officer assigned to complaint
-    assignedOfficer: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
-      default: null,
-      index: true,
-    },
-
-    // Complaint status
     status: {
       type: String,
       enum: [
-        "Reported",
-        "Assigned",
-        "In Progress",
-        "Resolved",
-        "Closed",
+        "SUBMITTED",
+        "VERIFIED",
+        "ASSIGNED",
+        "IN_PROGRESS",
+        "RESOLVED",
+        "REOPENED",
+        "REJECTED",
       ],
-      default: "Reported",
+      default: "SUBMITTED",
       index: true,
     },
 
-    // Complaint severity
-    severity: {
-      type: String,
-      enum: [
-        "Critical",
-        "High",
-        "Medium",
-        "Low",
-      ],
-      default: "Medium",
-      index: true,
+    department: {
+      id: { type: String, default: "DEPT-CIVIC" },
+      name: { type: String, default: "Public Works Department" },
     },
 
-    // Priority score from 0–100
-    score: {
-      type: Number,
-      min: 0,
-      max: 100,
-      default: 0,
+    statusHistory: [
+      {
+        status: { type: String, required: true },
+        timestamp: { type: Date, default: Date.now },
+        message: { type: String, default: "" },
+      },
+    ],
+
+    resolution: {
+      imageUrl: { type: String, default: null },
+      verifiedByCitizen: { type: Boolean, default: null },
+      verificationMessage: { type: String, default: null },
+      verifiedAt: { type: Date, default: null },
     },
 
-    // Estimated time required for repair
-    estimatedRepairHours: {
-      type: Number,
-      min: 0,
-      default: null,
-    },
-
-    // SLA
-    slaHours: {
-      type: Number,
-      min: 0,
-      default: null,
-    },
-
-    slaDeadline: {
-      type: Date,
-      default: null,
-      index: true,
-    },
-
-    // Resolution information
-    resolutionNote: {
-      type: String,
-      default: "",
-      trim: true,
-    },
-
-    // Important timestamps
-    reportedAt: {
-      type: Date,
-      default: Date.now,
-      index: true,
-    },
-
-    assignedAt: {
-      type: Date,
-      default: null,
-    },
-
-    startedAt: {
-      type: Date,
-      default: null,
-    },
-
-    resolvedAt: {
-      type: Date,
-      default: null,
-    },
-
-    closedAt: {
-      type: Date,
-      default: null,
+    citizen: {
+      type: mongoose.Schema.Types.Mixed,
+      default: "demoCitizenId",
     },
   },
   {
@@ -191,24 +126,13 @@ const complaintSchema = new mongoose.Schema(
   }
 );
 
-// Geospatial index for Live City Map
+// 2dsphere index for nearby GeoJSON spatial searches
 complaintSchema.index({
   location: "2dsphere",
 });
 
-// Dashboard queries
 complaintSchema.index({
-  status: 1,
-  severity: 1,
-});
-
-complaintSchema.index({
-  department: 1,
-  status: 1,
-});
-
-complaintSchema.index({
-  reportedAt: -1,
+  createdAt: -1,
 });
 
 module.exports = mongoose.model("Complaint", complaintSchema);

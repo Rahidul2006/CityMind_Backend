@@ -4,274 +4,138 @@ const createComplaint = async (req, res) => {
   try {
     const complaint = await complaintService.createComplaint(
       req.body,
-      req.user._id
+      req.file,
+      req.user?._id || "demoCitizenId"
     );
 
     res.status(201).json({
       success: true,
       message: "Complaint created successfully",
+      complaint,
       data: complaint,
     });
   } catch (error) {
     res.status(400).json({
       success: false,
-      message: error.message,
+      message: error.message || "Failed to create complaint",
+      errorCode: "COMPLAINT_CREATE_FAILED",
     });
   }
 };
 
-
 const getComplaints = async (req, res) => {
   try {
-    const result =
-      await complaintService.getComplaints(req.query);
+    const complaints = await complaintService.getComplaints(req.query);
 
     res.status(200).json({
       success: true,
-      data: result,
+      complaints,
+      data: complaints,
     });
   } catch (error) {
     res.status(500).json({
       success: false,
-      message: error.message,
+      message: error.message || "Failed to fetch complaints",
+      errorCode: "COMPLAINTS_FETCH_FAILED",
     });
   }
 };
 
-
 const getComplaintById = async (req, res) => {
   try {
-    const complaint =
-      await complaintService.getComplaintById(
-        req.params.id
-      );
+    const complaint = await complaintService.getComplaintById(req.params.id);
 
     res.status(200).json({
       success: true,
+      complaint,
       data: complaint,
     });
   } catch (error) {
     res.status(404).json({
       success: false,
-      message: error.message,
+      message: error.message || "Complaint not found",
+      errorCode: "COMPLAINT_NOT_FOUND",
     });
   }
 };
-
-
-const updateComplaint = async (req, res) => {
-  try {
-    const complaint =
-      await complaintService.updateComplaint(
-        req.params.id,
-        req.body
-      );
-
-    res.status(200).json({
-      success: true,
-      message: "Complaint updated successfully",
-      data: complaint,
-    });
-  } catch (error) {
-    res.status(400).json({
-      success: false,
-      message: error.message,
-    });
-  }
-};
-
-
-const assignComplaint = async (req, res) => {
-  try {
-    const complaint =
-      await complaintService.assignComplaint(
-        req.params.id,
-        req.body.officerId
-      );
-
-    res.status(200).json({
-      success: true,
-      message: "Complaint assigned successfully",
-      data: complaint,
-    });
-  } catch (error) {
-    res.status(400).json({
-      success: false,
-      message: error.message,
-    });
-  }
-};
-
 
 const updateStatus = async (req, res) => {
   try {
-    const complaint =
-      await complaintService.updateStatus(
-        req.params.id,
-        req.body.status
-      );
-
-    res.status(200).json({
-      success: true,
-      message: "Complaint status updated",
-      data: complaint,
-    });
-  } catch (error) {
-    res.status(400).json({
-      success: false,
-      message: error.message,
-    });
-  }
-};
-
-
-const resolveComplaint = async (req, res) => {
-  try {
-    const complaint =
-      await complaintService.resolveComplaint(
-        req.params.id,
-        req.body.resolutionNote
-      );
-
-    res.status(200).json({
-      success: true,
-      message: "Complaint resolved successfully",
-      data: complaint,
-    });
-  } catch (error) {
-    res.status(400).json({
-      success: false,
-      message: error.message,
-    });
-  }
-};
-
-
-const deleteComplaint = async (req, res) => {
-  try {
-    await complaintService.deleteComplaint(
-      req.params.id
+    const complaint = await complaintService.updateStatus(
+      req.params.id,
+      req.body.status,
+      req.body.message
     );
 
     res.status(200).json({
       success: true,
-      message: "Complaint deleted successfully",
+      message: "Complaint status updated successfully",
+      complaint,
+      data: complaint,
     });
   } catch (error) {
-    res.status(404).json({
+    res.status(400).json({
       success: false,
-      message: error.message,
+      message: error.message || "Failed to update status",
+      errorCode: "STATUS_UPDATE_FAILED",
     });
   }
 };
 
-
-const getComplaintStatistics = async (req, res) => {
+const verifyResolution = async (req, res) => {
   try {
-    const stats =
-      await complaintService.getComplaintStatistics();
+    const { resolved, message } = req.body;
+    const complaint = await complaintService.verifyResolution(
+      req.params.id,
+      resolved,
+      message
+    );
 
     res.status(200).json({
       success: true,
-      data: stats,
+      message: resolved
+        ? "Resolution verified by citizen"
+        : "Complaint marked as reopened",
+      complaint,
+      data: complaint,
     });
   } catch (error) {
-    res.status(500).json({
+    res.status(400).json({
       success: false,
-      message: error.message,
+      message: error.message || "Resolution verification failed",
+      errorCode: "VERIFICATION_FAILED",
     });
   }
 };
 
-
-const getIssuesByCategory = async (req, res) => {
+const getNearbyComplaints = async (req, res) => {
   try {
-    const data =
-      await complaintService.getIssuesByCategory();
+    const { latitude, longitude, radius } = req.query;
+    const complaints = await complaintService.getNearbyComplaints(
+      latitude,
+      longitude,
+      radius
+    );
 
     res.status(200).json({
       success: true,
-      data,
+      complaints,
+      data: complaints,
     });
   } catch (error) {
-    res.status(500).json({
+    res.status(400).json({
       success: false,
-      message: error.message,
+      message: error.message || "Failed to fetch nearby complaints",
+      errorCode: "NEARBY_FETCH_FAILED",
     });
   }
 };
-
-
-const getIssuesByStatus = async (req, res) => {
-  try {
-    const data =
-      await complaintService.getIssuesByStatus();
-
-    res.status(200).json({
-      success: true,
-      data,
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message,
-    });
-  }
-};
-
-
-const getPriorityIssues = async (req, res) => {
-  try {
-    const data =
-      await complaintService.getPriorityIssues(
-        req.query.limit || 10
-      );
-
-    res.status(200).json({
-      success: true,
-      data,
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message,
-    });
-  }
-};
-
-
-const getMapIssues = async (req, res) => {
-  try {
-    const data =
-      await complaintService.getMapIssues(
-        req.query
-      );
-
-    res.status(200).json({
-      success: true,
-      data,
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message,
-    });
-  }
-};
-
 
 module.exports = {
   createComplaint,
   getComplaints,
   getComplaintById,
-  updateComplaint,
-  assignComplaint,
   updateStatus,
-  resolveComplaint,
-  deleteComplaint,
-  getComplaintStatistics,
-  getIssuesByCategory,
-  getIssuesByStatus,
-  getPriorityIssues,
-  getMapIssues,
+  verifyResolution,
+  getNearbyComplaints,
 };
