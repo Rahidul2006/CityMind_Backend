@@ -66,4 +66,11 @@ router.patch(
   complaintController.assignDepartment
 );
 
+// 9. Delete a complaint by ID
+router.delete(
+  "/:id",
+  authMiddleware,
+  complaintController.deleteComplaint
+);
+
 module.exports = router;

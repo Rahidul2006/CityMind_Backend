@@ -463,6 +463,20 @@ class ComplaintService {
     const complaints = await Complaint.find(filter).sort({ createdAt: -1 }).lean();
     return complaints;
   }
+
+  // Delete complaint by ID or complaintId string
+  async deleteComplaint(id) {
+    let complaint = await Complaint.findById(id);
+    if (!complaint) {
+      complaint = await Complaint.findOne({ complaintId: id });
+    }
+    if (!complaint) {
+      throw new Error("Complaint not found");
+    }
+
+    const result = await Complaint.findByIdAndDelete(complaint._id);
+    return result;
+  }
 }
 
 module.exports = new ComplaintService();

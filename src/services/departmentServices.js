@@ -210,11 +210,24 @@ class DepartmentService {
   }
 
   async deleteDepartment(id) {
-    const count = await Complaint.countDocuments({ assignedDepartment: id });
-    if (count > 0) {
-      throw new Error(
-        `Cannot delete department with ${count} assigned complaints. Please deactivate the department instead.`
-      );
+    const User = require("../models/userModel");
+
+    // Unassign complaints assigned to this department
+    await Complaint.updateMany(
+      { assignedDepartment: id },
+      { 
+        $unset: { assignedDepartment: 1 }, 
+        $set: { status: "SUBMITTED" }
+      }
+    );
+
+    // Delete associated department officer user accounts
+    const dept = await Department.findById(id);
+    if (dept) {
+      if (dept.officerUserId) {
+        await User.findByIdAndDelete(dept.officerUserId);
+      }
+      await User.deleteMany({ departmentId: id });
     }
 
     const result = await Department.findByIdAndDelete(id);
