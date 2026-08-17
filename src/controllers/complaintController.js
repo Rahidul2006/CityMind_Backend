@@ -181,6 +181,22 @@ const getUnassignedComplaints = async (req, res) => {
   }
 };
 
+const deleteComplaint = async (req, res) => {
+  try {
+    await complaintService.deleteComplaint(req.params.id);
+    res.status(200).json({
+      success: true,
+      message: "Complaint deleted successfully",
+    });
+  } catch (error) {
+    res.status(400).json({
+      success: false,
+      message: error.message || "Failed to delete complaint",
+      errorCode: "COMPLAINT_DELETE_FAILED",
+    });
+  }
+};
+
 module.exports = {
   createComplaint,
   getComplaints,
@@ -190,4 +206,5 @@ module.exports = {
   getNearbyComplaints,
   assignDepartment,
   getUnassignedComplaints,
+  deleteComplaint,
 };
