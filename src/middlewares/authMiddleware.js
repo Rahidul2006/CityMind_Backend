@@ -47,16 +47,76 @@ const authenticate = async (req, res, next) => {
 
 const authorize = (...roles) => {
   return (req, res, next) => {
-    if (!req.user || !roles.includes(req.user.role)) {
+    const userRole = (req.user?.role || '').toUpperCase();
+    const normalizedRoles = roles.map((r) => String(r).toUpperCase());
+    
+    if (!req.user || (!normalizedRoles.includes(userRole) && !roles.includes(req.user.role))) {
       return res.status(403).json({
         success: false,
         message: `Forbidden: User role '${req.user?.role || 'unknown'}' is not authorized to access this resource.`,
+        errorCode: 'ROLE_FORBIDDEN',
       });
     }
     next();
   };
 };
 
-const authorizeAdmin = authorize('admin');
+const authorizeAdmin = authorize('ADMIN', 'SUPER_ADMIN', 'admin');
 
-module.exports = { authenticate, authorize, authorizeAdmin };
+const requireDepartmentOfficer = (req, res, next) => {
+  if (!req.user) {
+    return res.status(401).json({
+      success: false,
+      message: 'Unauthorized: Authentication required.',
+      errorCode: 'UNAUTHORIZED',
+    });
+  }
+
+  const role = (req.user.role || '').toUpperCase();
+  if (role !== 'DEPARTMENT_OFFICER' && role !== 'OFFICER') {
+    return res.status(403).json({
+      success: false,
+      message: 'Forbidden: Access restricted to Department Officers.',
+      errorCode: 'DEPARTMENT_OFFICER_REQUIRED',
+    });
+  }
+
+  if (!req.user.departmentId) {
+    return res.status(403).json({
+      success: false,
+      message: 'Forbidden: No municipal department associated with this officer account.',
+      errorCode: 'NO_DEPARTMENT_ASSIGNED',
+    });
+  }
+
+  next();
+};
+
+const requireAdmin = (req, res, next) => {
+  if (!req.user) {
+    return res.status(401).json({
+      success: false,
+      message: 'Unauthorized: Authentication required.',
+      errorCode: 'UNAUTHORIZED',
+    });
+  }
+
+  const role = (req.user.role || '').toUpperCase();
+  if (role !== 'ADMIN' && role !== 'SUPER_ADMIN') {
+    return res.status(403).json({
+      success: false,
+      message: 'Forbidden: Admin authorization required.',
+      errorCode: 'ADMIN_REQUIRED',
+    });
+  }
+
+  next();
+};
+
+module.exports = {
+  authenticate,
+  authorize,
+  authorizeAdmin,
+  requireDepartmentOfficer,
+  requireAdmin,
+};

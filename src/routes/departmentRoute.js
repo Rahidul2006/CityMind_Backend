@@ -1,84 +1,38 @@
 const express = require("express");
-
 const router = express.Router();
 
 const departmentController = require("../controllers/departmentController");
-const { authenticate: authMiddleware } = require("../middlewares/authMiddleware");
-
+const { authenticate: authMiddleware, requireAdmin } = require("../middlewares/authMiddleware");
 
 // ==========================================
-// DEPARTMENT ROUTES
+// DEPARTMENT ROUTES FOR CITYMIND AI (ADMIN ONLY)
 // ==========================================
 
-// Create department
-router.post(
-  "/",
-  authMiddleware,
-  departmentController.createDepartment
-);
+// All /api/departments routes require admin authentication
+router.use(authMiddleware, requireAdmin);
 
-// Get all departments
-router.get(
-  "/",
-  authMiddleware,
-  departmentController.getDepartments
-);
+// 1. Create department
+router.post("/", departmentController.createDepartment);
 
-// Department overview
-router.get(
-  "/overview",
-  authMiddleware,
-  departmentController.getDepartmentOverview
-);
+// 2. Get all departments (with complaint counts & KPIs)
+router.get("/", departmentController.getDepartments);
 
-// Workload distribution
-router.get(
-  "/workload",
-  authMiddleware,
-  departmentController.getWorkloadDistribution
-);
+// 3. Get single department details
+router.get("/:id", departmentController.getDepartmentById);
 
-// Top overdue departments
-router.get(
-  "/overdue",
-  authMiddleware,
-  departmentController.getTopOverdueDepartments
-);
+// 4. Update department metadata
+router.patch("/:id", departmentController.updateDepartment);
 
-// Get department by ID
-router.get(
-  "/:id",
-  authMiddleware,
-  departmentController.getDepartmentById
-);
+// 5. Activate / Deactivate department
+router.patch("/:id/status", departmentController.toggleDepartmentStatus);
 
-// Update department
-router.patch(
-  "/:id",
-  authMiddleware,
-  departmentController.updateDepartment
-);
+// 6. Delete department (only if no complaints assigned)
+router.delete("/:id", departmentController.deleteDepartment);
 
-// Update department SLA
-router.patch(
-  "/:id/sla",
-  authMiddleware,
-  departmentController.updateSLA
-);
+// 7. Get complaints assigned to specific department
+router.get("/:id/complaints", departmentController.getDepartmentComplaints);
 
-// Get department staff
-router.get(
-  "/:id/staff",
-  authMiddleware,
-  departmentController.getDepartmentStaff
-);
-
-// Deactivate department
-router.delete(
-  "/:id",
-  authMiddleware,
-  departmentController.deleteDepartment
-);
-
+// 8. Get department detailed statistics breakdown
+router.get("/:id/stats", departmentController.getDepartmentStats);
 
 module.exports = router;

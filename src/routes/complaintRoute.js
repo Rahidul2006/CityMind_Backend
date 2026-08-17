@@ -24,32 +24,46 @@ router.get(
   complaintController.getNearbyComplaints
 );
 
-// 3. Get all complaints belonging to/visible for citizen
+// 3. Get unassigned complaints (MUST BE BEFORE /:id ROUTE)
+router.get(
+  "/unassigned",
+  authMiddleware,
+  complaintController.getUnassignedComplaints
+);
+
+// 4. Get all complaints belonging to/visible for citizen
 router.get(
   "/",
   authMiddleware,
   complaintController.getComplaints
 );
 
-// 4. Get complete details for a single complaint
+// 5. Get complete details for a single complaint
 router.get(
   "/:id",
   authMiddleware,
   complaintController.getComplaintById
 );
 
-// 5. Citizen verifies resolution (YES -> RESOLVED / NO -> REOPENED)
+// 6. Citizen verifies resolution (YES -> RESOLVED / NO -> REOPENED)
 router.post(
   "/:id/verify",
   authMiddleware,
   complaintController.verifyResolution
 );
 
-// 6. Update complaint status (used by municipal dashboard / internal)
+// 7. Update complaint status (used by municipal dashboard / internal)
 router.patch(
   "/:id/status",
   authMiddleware,
   complaintController.updateStatus
+);
+
+// 8. Assign complaint to a municipal department
+router.patch(
+  "/:id/department",
+  authMiddleware,
+  complaintController.assignDepartment
 );
 
 module.exports = router;

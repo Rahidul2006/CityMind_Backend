@@ -1,3 +1,4 @@
+
 const mongoose = require("mongoose");
 
 const complaintSchema = new mongoose.Schema(
@@ -100,6 +101,48 @@ const complaintSchema = new mongoose.Schema(
       id: { type: String, default: "DEPT-CIVIC" },
       name: { type: String, default: "Public Works Department" },
     },
+
+    assignedDepartment: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Department",
+      default: null,
+      index: true,
+    },
+
+    assignedAt: {
+      type: Date,
+      default: null,
+    },
+
+    assignedBy: {
+      type: mongoose.Schema.Types.Mixed,
+      default: null,
+    },
+
+    assignmentHistory: [
+      {
+        departmentId: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: "Department",
+        },
+        departmentName: {
+          type: String,
+          default: "",
+        },
+        assignedBy: {
+          type: mongoose.Schema.Types.Mixed,
+          default: "Admin",
+        },
+        assignedAt: {
+          type: Date,
+          default: Date.now,
+        },
+        reason: {
+          type: String,
+          default: "",
+        },
+      },
+    ],
 
     statusHistory: [
       {
