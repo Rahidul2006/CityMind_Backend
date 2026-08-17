@@ -464,7 +464,7 @@ class ComplaintService {
     return complaints;
   }
 
-  // Delete complaint by ID or complaintId string
+  // Delete complaint by ID or complaintId string (Only resolved issues allowed)
   async deleteComplaint(id) {
     let complaint = await Complaint.findById(id);
     if (!complaint) {
@@ -472,6 +472,13 @@ class ComplaintService {
     }
     if (!complaint) {
       throw new Error("Complaint not found");
+    }
+
+    const currentStatus = (complaint.status || "").toUpperCase();
+    if (currentStatus !== "RESOLVED") {
+      throw new Error(
+        `Only resolved complaints can be deleted. Current status is '${complaint.status}'.`
+      );
     }
 
     const result = await Complaint.findByIdAndDelete(complaint._id);
