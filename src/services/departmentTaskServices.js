@@ -379,17 +379,80 @@ class DepartmentTaskService {
     return complaints;
   }
 
-  // 9. Map tasks with geo-coordinates
-  async getDepartmentMapTasks(departmentId) {
+  // 9. Map tasks with original citizen geo-coordinates
+  async getDepartmentMapTasks(departmentId, query = {}) {
     if (!departmentId) {
       throw new Error("Officer department ID is missing");
     }
 
-    const complaints = await Complaint.find({ assignedDepartment: departmentId })
-      .select("complaintId title category status priority severity location reportedLocation address createdAt")
+    const filter = { assignedDepartment: departmentId };
+
+    // Active status filter: ASSIGNED, IN_PROGRESS, REOPENED
+    if (query.status && query.status !== "All") {
+      filter.status = query.status;
+    } else {
+      filter.status = { $in: ["ASSIGNED", "IN_PROGRESS", "REOPENED"] };
+    }
+
+    if (query.priority && query.priority !== "All") {
+      const p = query.priority.toUpperCase();
+      filter.$or = [{ priority: p }, { "aiAnalysis.severity": p }, { severity: p }];
+    }
+
+    if (query.category && query.category !== "All") {
+      filter.category = query.category;
+    }
+
+    const complaints = await Complaint.find(filter)
+      .sort({ createdAt: -1 })
       .lean();
 
-    return complaints;
+    return complaints.map((c) => {
+      let lat = null;
+      let lng = null;
+      let accuracy = 0;
+
+      if (c.capturedLocation && typeof c.capturedLocation.latitude === "number" && typeof c.capturedLocation.longitude === "number") {
+        lat = c.capturedLocation.latitude;
+        lng = c.capturedLocation.longitude;
+        accuracy = c.capturedLocation.accuracy || 0;
+      } else if (c.location && Array.isArray(c.location.coordinates) && c.location.coordinates.length === 2) {
+        // GeoJSON: [longitude, latitude]
+        lng = c.location.coordinates[0];
+        lat = c.location.coordinates[1];
+        accuracy = c.capturedLocation?.accuracy || c.image?.gpsAccuracy || 0;
+      } else if (c.reportedLocation && typeof c.reportedLocation.latitude === "number" && typeof c.reportedLocation.longitude === "number") {
+        lat = c.reportedLocation.latitude;
+        lng = c.reportedLocation.longitude;
+        accuracy = c.capturedLocation?.accuracy || 0;
+      } else if (c.image && typeof c.image.latitude === "number" && typeof c.image.longitude === "number") {
+        lat = c.image.latitude;
+        lng = c.image.longitude;
+        accuracy = c.image.gpsAccuracy || 0;
+      }
+
+      const priority = c.priority || c.aiAnalysis?.severity || c.severity || "MEDIUM";
+
+      return {
+        _id: c._id ? c._id.toString() : "",
+        complaintId: c.complaintId || (c._id ? c._id.toString() : ""),
+        category: c.category || "General",
+        priority: priority.toUpperCase(),
+        status: c.status,
+        description: c.description || c.title || "",
+        title: c.title || "Civic Complaint",
+        location: {
+          latitude: lat,
+          longitude: lng,
+          accuracy: accuracy,
+        },
+        locationSource: c.locationSource || "gps",
+        address: c.address || "Captured GPS location",
+        imageUrl: c.image?.url || (typeof c.image === "string" ? c.image : ""),
+        createdAt: c.createdAt,
+        assignedAt: c.assignedAt || c.createdAt,
+      };
+    });
   }
 
   // 10. Department profile
