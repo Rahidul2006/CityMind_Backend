@@ -245,11 +245,10 @@ const getMapTasks = async (req, res) => {
       });
     }
 
-    const complaints = await departmentTaskService.getDepartmentMapTasks(departmentId);
+    const complaints = await departmentTaskService.getDepartmentMapTasks(departmentId, req.query);
     res.status(200).json({
       success: true,
       data: complaints,
-      complaints,
     });
   } catch (error) {
     res.status(error.statusCode || 500).json({
