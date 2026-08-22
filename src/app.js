@@ -8,6 +8,7 @@ const authRouter = require('./routes/authRoute');
 const complaintRoute = require("./routes/complaintRoute");
 const departmentRoute = require("./routes/departmentRoute");
 const departmentTaskRoute = require("./routes/departmentTaskRoute");
+const analyticsRoute = require("./routes/analyticsRoute");
 
 const app = express();
 
@@ -23,5 +24,6 @@ app.use('/users', userRouter);
 app.use("/api/complaints", complaintRoute);
 app.use("/api/departments", departmentRoute);
 app.use("/api/department", departmentTaskRoute);
+app.use("/api/analytics", analyticsRoute);
 
 module.exports = app;
